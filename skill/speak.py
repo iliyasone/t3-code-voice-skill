@@ -2,8 +2,8 @@
 """Voice an agent reply in T3 Code.
 
 Reads the reply text from stdin (or, with --last, the previous reply from this
-Claude Code session's transcript), reads it aloud with OpenAI gpt-audio-1.5 (voice
-marin) in one request, and prints a small HTML player to stdout for the html_render tool.
+Claude Code session's transcript), reads it aloud with OpenAI gpt-audio-1.5 in one
+request, and prints a small HTML player to stdout for the html_render tool.
 
 The audio is stored as an MP3 behind an 8-byte PNG signature with a .png name:
 html_render only inlines local files that look like images, and the player
@@ -26,7 +26,6 @@ ENV_FILE = os.path.expanduser("~/.config/openai-voice/env")
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MODEL = "gpt-audio-1.5"
-VOICE = "marin"
 READER_PROMPT = (
     "You are a voice actor. Read the user's text aloud exactly as written, word for word, "
     "in its language. Do not add, drop, translate or rephrase anything; no greeting, no comments. "
@@ -99,11 +98,11 @@ def speakable(md):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def synthesize(key, text):
+def synthesize(key, text, voice):
     body = {
         "model": MODEL,
         "modalities": ["text", "audio"],
-        "audio": {"voice": VOICE, "format": "mp3"},
+        "audio": {"voice": voice, "format": "mp3"},
         "messages": [
             {"role": "system", "content": READER_PROMPT},
             {"role": "user", "content": text},
@@ -137,13 +136,14 @@ PLAYER = (
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--last", action="store_true", help="speak the previous reply of this session")
+    parser.add_argument("--voice", default="marin", help="OpenAI voice (default: marin)")
     args = parser.parse_args()
 
     started = time.time()
     text = speakable(last_reply() if args.last else sys.stdin.read())
     if not text:
         sys.exit("nothing to speak")
-    audio = synthesize(api_key(), text)
+    audio = synthesize(api_key(), text, args.voice)
 
     os.makedirs(OUT_DIR, exist_ok=True)
     for old in glob.glob(f"{OUT_DIR}/*.png"):
@@ -155,7 +155,7 @@ def main():
 
     print(PLAYER.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     print(
-        f"t3-voice: {MODEL}/{VOICE}, {len(text)} chars, {len(audio) // 1024} KiB, "
+        f"t3-voice: {MODEL}/{args.voice}, {len(text)} chars, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
         file=sys.stderr,
     )
