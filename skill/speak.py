@@ -11,6 +11,7 @@ strips the signature again before playback.
 """
 
 import argparse
+import base64
 import concurrent.futures
 import glob
 import json
@@ -25,13 +26,20 @@ import uuid
 ENV_FILE = os.path.expanduser("~/.config/openai-voice/env")
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-MODEL = os.environ.get("T3_VOICE_MODEL", "gpt-4o-mini-tts")
-VOICE = os.environ.get("T3_VOICE_VOICE", "coral")
+# gpt-audio-* models read the whole reply in one chat request; the older
+# TTS models (gpt-4o-mini-tts, tts-1) are faster but sound flatter.
+MODEL = os.environ.get("T3_VOICE_MODEL", "gpt-audio-1.5")
+VOICE = os.environ.get("T3_VOICE_VOICE", "marin")
 CHUNK_CHARS = 220
 INSTRUCTIONS = (
     "Read the text exactly as written, word for word, in its own language. "
     "Natural, warm, conversational tone, like a colleague answering out loud. "
     "Moderately brisk pace."
+)
+READER_PROMPT = (
+    "You are a voice actor. Read the user's text aloud exactly as written, word for word, "
+    "in its language. Do not add, drop, translate or rephrase anything; no greeting, no comments. "
+    "Natural, warm, lively conversational delivery, like a smart friend explaining something."
 )
 
 
@@ -123,17 +131,33 @@ def chunks(text):
 
 
 def synthesize(key, text):
-    body = {"model": MODEL, "voice": VOICE, "input": text, "response_format": "mp3"}
-    if MODEL.startswith("gpt-"):
-        body["instructions"] = INSTRUCTIONS
+    if MODEL.startswith("gpt-audio"):
+        url = "https://api.openai.com/v1/chat/completions"
+        body = {
+            "model": MODEL,
+            "modalities": ["text", "audio"],
+            "audio": {"voice": VOICE, "format": "mp3"},
+            "messages": [
+                {"role": "system", "content": READER_PROMPT},
+                {"role": "user", "content": text},
+            ],
+        }
+    else:
+        url = "https://api.openai.com/v1/audio/speech"
+        body = {"model": MODEL, "voice": VOICE, "input": text, "response_format": "mp3"}
+        if MODEL.startswith("gpt-"):
+            body["instructions"] = INSTRUCTIONS
     request = urllib.request.Request(
-        "https://api.openai.com/v1/audio/speech",
+        url,
         json.dumps(body).encode(),
         {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                if MODEL.startswith("gpt-audio"):
+                    reply = json.load(response)["choices"][0]["message"]
+                    return base64.b64decode(reply["audio"]["data"])
                 return response.read()
         except (urllib.error.URLError, TimeoutError) as error:
             if attempt == 2:
@@ -158,7 +182,7 @@ def main():
     text = speakable(last_reply() if args.last else sys.stdin.read())
     if not text:
         sys.exit("nothing to speak")
-    parts = chunks(text)
+    parts = [text] if MODEL.startswith("gpt-audio") else chunks(text)
     key = api_key()
     with concurrent.futures.ThreadPoolExecutor(len(parts)) as pool:
         audio = b"".join(pool.map(lambda part: synthesize(key, part), parts))
@@ -171,11 +195,9 @@ def main():
     with open(path, "wb") as f:
         f.write(PNG_SIGNATURE + audio)
 
-    seconds = len(audio) * 8 / 128000  # OpenAI MP3 is 128 kbps CBR
-    duration = f"{int(seconds // 60)}:{int(seconds % 60):02d}"
     print(PLAYER.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     print(
-        f"t3-voice: {len(text)} chars, {len(parts)} chunks, {duration} audio, "
+        f"t3-voice: {MODEL}/{VOICE}, {len(text)} chars, {len(parts)} chunks, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
         file=sys.stderr,
     )

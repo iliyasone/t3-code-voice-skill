@@ -15,6 +15,10 @@ reading of the reply itself, never a summary or a paraphrase.
 Once Ilias asks for voice replies, keep doing it for every reply in the
 thread until he says to stop.
 
+The voice is female (marin), so while voice mode is on, refer to yourself
+in the feminine gender in Russian («я проверила», «я сделала»). This is
+the one change to how you write; everything else stays as usual.
+
 1. Write the reply exactly as you would without this skill — same content,
    length, structure, tone, Markdown. Do not adapt it for listening.
 2. Before sending it, pipe that exact text into the script (quoted heredoc,
@@ -55,15 +59,17 @@ are read as written. Words are never changed.
 
 ## Latency and limits
 
-- The reply is cut into ~220-char pieces at sentence boundaries and all
-  pieces are synthesized in parallel. Measured: ~1.3 s for one sentence,
-  ~3 s for 560 chars, ~6 s for 1700 chars (vs ~9 s for 560 chars unsplit).
+- Default: `gpt-audio-1.5`, voice `marin`, the whole reply in one
+  request. It reads verbatim (transcript matched the text word for word)
+  and sounds best, but nothing plays until it finishes: ~35 s for
+  1764 chars (2 min of audio), roughly proportional to length.
 - The player autoplays only within 2 minutes of being made, so reopening
   an old thread stays silent. The desktop app (Electron) allows autoplay;
   a phone browser may block it — then Ilias presses ▶.
-- Defaults: model `gpt-4o-mini-tts`, voice `coral`. Override with env
-  `T3_VOICE_MODEL=tts-1` (about 1.5 s faster, flatter Russian) or
-  `T3_VOICE_VOICE=<name>`.
+- Faster fallback: env `T3_VOICE_MODEL=gpt-4o-mini-tts` (voice e.g.
+  `T3_VOICE_VOICE=coral`) cuts the reply into ~220-char pieces synthesized
+  in parallel: ~3 s for 560 chars, ~6 s for 1700 chars, but Ilias found
+  that voice flat. `tts-1` is faster still.
 - The OpenAI key is read from `~/.config/openai-voice/env`
   (`OPENAI_API_KEY=...`). Audio files live in `~/.cache/t3-voice/` and are
   deleted after 7 days.
