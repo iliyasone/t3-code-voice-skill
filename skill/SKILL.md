@@ -56,8 +56,8 @@ are read as written. Words are never changed.
 ## Latency and limits
 
 - The reply is cut into ~220-char pieces at sentence boundaries and all
-  pieces are synthesized in parallel, so synthesis takes about 1.5–4 s
-  almost regardless of reply length.
+  pieces are synthesized in parallel. Measured: ~1.3 s for one sentence,
+  ~3 s for 560 chars, ~6 s for 1700 chars (vs ~9 s for 560 chars unsplit).
 - The player autoplays only within 2 minutes of being made, so reopening
   an old thread stays silent. The desktop app (Electron) allows autoplay;
   a phone browser may block it — then Ilias presses ▶.

@@ -13,4 +13,5 @@ Installed as `~/.agents/skills/t3-voice` (symlink to `skill/`), linked into
 `~/.claude/skills` and `~/.codex/skills`.
 
 Measured synthesis time: ~1.3 s for one sentence, ~3 s for 560 characters
-(`gpt-4o-mini-tts`, 3 parallel chunks); `tts-1` ~2 s.
+~5.7 s for 1700 characters (`gpt-4o-mini-tts`, parallel
+chunks); `tts-1` ~2 s for 560 characters.
