@@ -2,8 +2,8 @@
 """Voice an agent reply in T3 Code.
 
 Reads the reply text from stdin (or, with --last, the previous reply from this
-Claude Code session's transcript), synthesizes it with OpenAI TTS in parallel
-chunks, and prints a small HTML player to stdout for the html_render tool.
+Claude Code session's transcript), reads it aloud with OpenAI gpt-audio-1.5 (voice
+marin) in one request, and prints a small HTML player to stdout for the html_render tool.
 
 The audio is stored as an MP3 behind an 8-byte PNG signature with a .png name:
 html_render only inlines local files that look like images, and the player
@@ -12,7 +12,6 @@ strips the signature again before playback.
 
 import argparse
 import base64
-import concurrent.futures
 import glob
 import json
 import os
@@ -26,16 +25,8 @@ import uuid
 ENV_FILE = os.path.expanduser("~/.config/openai-voice/env")
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-# gpt-audio-* models read the whole reply in one chat request; the older
-# TTS models (gpt-4o-mini-tts, tts-1) are faster but sound flatter.
-MODEL = os.environ.get("T3_VOICE_MODEL", "gpt-audio-1.5")
-VOICE = os.environ.get("T3_VOICE_VOICE", "marin")
-CHUNK_CHARS = 220
-INSTRUCTIONS = (
-    "Read the text exactly as written, word for word, in its own language. "
-    "Natural, warm, conversational tone, like a colleague answering out loud. "
-    "Moderately brisk pace."
-)
+MODEL = "gpt-audio-1.5"
+VOICE = "marin"
 READER_PROMPT = (
     "You are a voice actor. Read the user's text aloud exactly as written, word for word, "
     "in its language. Do not add, drop, translate or rephrase anything; no greeting, no comments. "
@@ -108,60 +99,30 @@ def speakable(md):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def chunks(text):
-    sentences = re.split(r"(?<=[.!?…;:])\s+", text)
-    pieces = []
-    for s in sentences:
-        while len(s) > CHUNK_CHARS * 2:  # one huge sentence: cut at a comma or space
-            cut = max(s.rfind(", ", 0, CHUNK_CHARS * 2), s.rfind(" ", 0, CHUNK_CHARS * 2))
-            cut = cut + 1 if cut > 0 else CHUNK_CHARS * 2
-            pieces.append(s[:cut].strip())
-            s = s[cut:].strip()
-        pieces.append(s)
-    out, cur = [], ""
-    for p in pieces:
-        if cur and len(cur) + len(p) + 1 > CHUNK_CHARS:
-            out.append(cur)
-            cur = p
-        else:
-            cur = f"{cur} {p}".strip()
-    if cur:
-        out.append(cur)
-    return out
-
-
 def synthesize(key, text):
-    if MODEL.startswith("gpt-audio"):
-        url = "https://api.openai.com/v1/chat/completions"
-        body = {
-            "model": MODEL,
-            "modalities": ["text", "audio"],
-            "audio": {"voice": VOICE, "format": "mp3"},
-            "messages": [
-                {"role": "system", "content": READER_PROMPT},
-                {"role": "user", "content": text},
-            ],
-        }
-    else:
-        url = "https://api.openai.com/v1/audio/speech"
-        body = {"model": MODEL, "voice": VOICE, "input": text, "response_format": "mp3"}
-        if MODEL.startswith("gpt-"):
-            body["instructions"] = INSTRUCTIONS
+    body = {
+        "model": MODEL,
+        "modalities": ["text", "audio"],
+        "audio": {"voice": VOICE, "format": "mp3"},
+        "messages": [
+            {"role": "system", "content": READER_PROMPT},
+            {"role": "user", "content": text},
+        ],
+    }
     request = urllib.request.Request(
-        url,
+        "https://api.openai.com/v1/chat/completions",
         json.dumps(body).encode(),
         {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
     for attempt in range(3):
         try:
             with urllib.request.urlopen(request, timeout=300) as response:
-                if MODEL.startswith("gpt-audio"):
-                    reply = json.load(response)["choices"][0]["message"]
-                    return base64.b64decode(reply["audio"]["data"])
-                return response.read()
+                return base64.b64decode(json.load(response)["choices"][0]["message"]["audio"]["data"])
+        except urllib.error.HTTPError as error:
+            raise SystemExit(f"OpenAI {MODEL} failed: {error.code} {error.read().decode()[:500]}")
         except (urllib.error.URLError, TimeoutError) as error:
             if attempt == 2:
-                raise SystemExit(f"OpenAI TTS failed: {getattr(error, 'read', lambda: error)()}")
+                raise SystemExit(f"OpenAI {MODEL} unreachable: {error}")
             time.sleep(0.5)
 
 
@@ -182,10 +143,7 @@ def main():
     text = speakable(last_reply() if args.last else sys.stdin.read())
     if not text:
         sys.exit("nothing to speak")
-    parts = [text] if MODEL.startswith("gpt-audio") else chunks(text)
-    key = api_key()
-    with concurrent.futures.ThreadPoolExecutor(len(parts)) as pool:
-        audio = b"".join(pool.map(lambda part: synthesize(key, part), parts))
+    audio = synthesize(api_key(), text)
 
     os.makedirs(OUT_DIR, exist_ok=True)
     for old in glob.glob(f"{OUT_DIR}/*.png"):
@@ -197,7 +155,7 @@ def main():
 
     print(PLAYER.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     print(
-        f"t3-voice: {MODEL}/{VOICE}, {len(text)} chars, {len(parts)} chunks, {len(audio) // 1024} KiB, "
+        f"t3-voice: {MODEL}/{VOICE}, {len(text)} chars, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
         file=sys.stderr,
     )
