@@ -28,7 +28,10 @@ Once Ilias asks for voice replies, voice every reply in the thread,
 starting with the one that answers that request, until he says to stop.
 
 1. Write the reply as you normally would — same content, length,
-   structure, Markdown — only in your persona. Do not adapt it for listening.
+   structure, Markdown — only in your persona. Do not adapt it for listening,
+   except one habit: give a file as a link with a readable name,
+   `[SKILL.md](/root/…/SKILL.md)`, not as a bare path. The name is heard,
+   the path is skipped, and a sentence never hinges on a silent path.
 2. Pipe that exact text into the script. Use a quoted heredoc so `$` and
    backticks stay literal; pick another delimiter if the text contains a
    line `EOF`:
@@ -63,8 +66,8 @@ not in your persona.
 
 ## Behaviour to expect
 
-- Speech: Markdown markup is dropped, code blocks are skipped, URLs are
-  read as «ссылка»; every word is kept.
+- Speech: Markdown markup, code blocks, URLs and file paths are dropped;
+  every other word is kept. Link text is read, the link target is not.
 - Latency: nothing plays until the whole reply is synthesized. Клауди
   (`gpt-audio-1.5`): about 2 s for one sentence, 18 s for 930 characters,
   35 s for 1760. Codex (`tts-1-hd`): about 2–4 s, since it renders faster

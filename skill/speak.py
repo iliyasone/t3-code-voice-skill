@@ -79,24 +79,48 @@ def last_reply():
     sys.exit("no previous reply found in the transcript")
 
 
+PATH = re.compile(r"(?<![\w/])[~.]{0,2}/?(?:[\w.@+-]+/)+[\w.@+-]*(?::\d+(?:-\d+)?)?")
+
+
+def is_path(token):
+    """File paths are noise when heard: /abs, ~/x, ./x, a/b/c, or dir/file.ext."""
+    return bool(
+        re.match(r"[~./]", token)
+        or token.count("/") >= 2
+        or re.search(r"\.\w{1,5}(?::\d+(?:-\d+)?)?$", token)
+    )
+
+
+def drop_path(match):
+    token = match.group(0)
+    core = token.rstrip(".")  # a path can end a sentence; keep the full stop
+    return " " + token[len(core):] if is_path(core) else token
+
+
 def speakable(md):
-    """Strip Markdown markup only; the words themselves stay untouched."""
+    """Strip Markdown markup, code blocks, URLs and file paths; other words stay untouched."""
     text = re.sub(r"```.*?```", " ", md, flags=re.S)
     text = re.sub(r"<[^>\n]+>", " ", text)
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"https?://\S+", "ссылка", text)
+    text = re.sub(r"https?://\S+", " ", text)
+    text = PATH.sub(drop_path, text)
     lines = []
     for line in text.splitlines():
         if re.fullmatch(r"\s*\|?[\s:|-]+\|?\s*", line) and "-" in line:
             continue  # table separator row
         line = re.sub(r"^\s*(#{1,6}|>+|[-*+])\s+", "", line)
         line = re.sub(r"\s*\|\s*", ", ", line.strip().strip("|").strip())
-        if line:
+        line = re.sub(r"(\*\*|__|\*|`|~~)", "", line)
+        # Tidy punctuation left behind by removed paths: "файл: , скрипт: ." -> "файл, скрипт."
+        line = re.sub(r"\((?:\s*(?:см|see)\.?)?\s*\)", " ", line)
+        line = re.sub(r"\s+([,.;:!?])", r"\1", line)
+        line = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", line)
+        line = re.sub(r"[,;:]+(?=\s*[.!?]|$)", "", line)
+        line = re.sub(r"^[\s,.;:—–-]+", "", line).strip()
+        if re.search(r"\w", line):
             lines.append(line if re.search(r"[.!?…:;,]$", line) else line + ".")
-    text = " ".join(lines)
-    text = re.sub(r"(\*\*|__|\*|`|~~)", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
 
 def post(key, url, body):
