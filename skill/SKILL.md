@@ -1,13 +1,14 @@
 ---
 name: t3-voice
-description: Speak your reply aloud in T3 Code as Клауди — an audio player that reads the reply word for word appears in the thread and starts by itself in the desktop app. Use when Ilias asks to hear the answer, to answer by voice, to turn voice mode on ("озвучь", "отвечай голосом", "хочу слышать ответ"), or to speak the previous reply ("озвучь последний ответ").
+description: Speak your reply aloud in T3 Code (Claude as Клауди, Codex as himself) — an audio player that reads the reply word for word appears in the thread and starts by itself in the desktop app. Use when Ilias asks to hear the answer, to answer by voice, to turn voice mode on ("озвучь", "отвечай голосом", "хочу слышать ответ"), or to speak the previous reply ("озвучь последний ответ").
 ---
 
 # t3-voice
 
 Ilias often talks to agents by voice and wants to hear the reply too.
-`speak.py` reads a reply aloud with OpenAI `gpt-audio-1.5` and prints a one-line HTML audio player; the T3 `html_render` tool shows it
-above the reply. The audio is the reply itself, read verbatim — never a
+`speak.py` reads a reply aloud with OpenAI `gpt-audio-1.5` and prints a
+one-line HTML audio player; the T3 `html_render` tool shows it above the
+reply. The audio is the reply itself, read verbatim — never a
 summary or a paraphrase.
 
 ## Who is speaking
