@@ -8,8 +8,7 @@ OpenAI TTS → an MP3 disguised as a PNG (so
 `html_render` inlines it) → a tiny `<audio>` player that autoplays in the
 desktop app.
 
-- `skill/SKILL.md` — instructions for the agent.
-- `skill/speak.py` — synthesizer; stdin text or `--last`, prints the player HTML.
-
-Installed as `~/.agents/skills/t3-voice` (symlink to `skill/`), linked into
-`~/.claude/skills` and `~/.codex/skills`.
+The skill's source lives in [iliyasone/skills](https://github.com/iliyasone/skills/tree/main/skills/t3-voice);
+`skill/` here is a symlink to its local clone, `/root/repositories/skills/skills/t3-voice`,
+which is also what `~/.agents/skills/t3-voice` points to (linked into
+`~/.claude/skills` and `~/.codex/skills`).
