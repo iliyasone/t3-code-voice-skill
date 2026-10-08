@@ -2,8 +2,9 @@
 
 # t3-voice
 
-Agent skill that reads the agent's reply aloud in T3 Code as Клауди:
-OpenAI `gpt-audio-1.5` (voice `marin`) → an MP3 disguised as a PNG (so
+Agent skill that reads the agent's reply aloud in T3 Code — Claude as
+Клауди (`gpt-audio-1.5`, voice `marin`), Codex with `tts-1-hd` / `echo`:
+OpenAI TTS → an MP3 disguised as a PNG (so
 `html_render` inlines it) → a tiny `<audio>` player that autoplays in the
 desktop app.
 
