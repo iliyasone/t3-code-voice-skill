@@ -160,10 +160,9 @@ def post(key, url, body):
 
 
 def chatgpt(text, voice):
-    """ChatGPT Read Aloud voice from the local arbor-tts service."""
-    request = urllib.request.Request(
-        ARBOR_URL, json.dumps({"input": text, "voice": voice}).encode(), {"Content-Type": "application/json"}
-    )
+    """ChatGPT Read Aloud voice from the local arbor-tts service; it writes numbers out as words first."""
+    body = {"input": text, "voice": voice, "spell_numbers": True}
+    request = urllib.request.Request(ARBOR_URL, json.dumps(body).encode(), {"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(request, timeout=600) as response:
             audio = response.read()
