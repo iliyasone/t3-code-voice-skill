@@ -163,11 +163,16 @@ def chatgpt(text, voice):
     """ChatGPT Read Aloud voice from the local arbor-tts service; it writes numbers out as words first."""
     body = {"input": text, "voice": voice, "spell_numbers": True}
     request = urllib.request.Request(ARBOR_URL, json.dumps(body).encode(), {"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=600) as response:
-            audio = response.read()
-    except (urllib.error.URLError, http.client.HTTPException, TimeoutError) as error:
-        raise SystemExit(f"arbor-tts failed: {error}")
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(request, timeout=600) as response:
+                audio = response.read()
+            break
+        except http.client.IncompleteRead as error:  # ChatGPT reset the audio stream midway; usually one-off
+            if attempt:
+                raise SystemExit(f"arbor-tts failed: {error}")
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError) as error:
+            raise SystemExit(f"arbor-tts failed: {error}")
     if not audio:
         raise SystemExit("arbor-tts returned no audio")
     return audio
