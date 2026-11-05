@@ -53,4 +53,4 @@ ln -s ../../.agents/skills/t3-voice ~/.codex/skills/t3-voice    # Codex
 ```
 
 [SKILL.md](skill/SKILL.md) is written for one person's setup: it tells
-Claude to speak of herself in the feminine in Russian. Adapt it to yours.
+Claude to speak of herself in the feminine. Adapt it to yours.
