@@ -18,8 +18,7 @@ skill to work, not to hear how it was committed.
 
 Never commit secrets or personal data: webhook URLs, API keys, ChatGPT
 credentials, tokens, transcripts. They live outside the repo, in
-`~/.config/t3-voice/repair-webhook`, `~/.config/openai-voice/env` and
-`~/.config/chatgpt-arbor/creds.json`.
+`~/.config/t3-voice/repair-webhook` and `~/.config/chatgpt-arbor/creds.json`.
 
 ## Repair webhook
 

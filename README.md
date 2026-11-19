@@ -31,9 +31,6 @@ passes the script's output to T3's `html_render` tool. The script:
   endpoint at `127.0.0.1:8811`. You can point the script at another address
   with `ARBOR_TTS_URL`.
 - **Google Translate's free voice** takes over when the ChatGPT voice fails.
-- **OpenAI `gpt-audio-1.5`** is paid, so the script uses it only when both
-  voices above fail. The key comes from `OPENAI_API_KEY` or
-  `~/.config/openai-voice/env`.
 
 ## Self-repair
 

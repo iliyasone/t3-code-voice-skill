@@ -11,7 +11,6 @@ Voices, in order of preference:
    T3 webhook (URL in ~/.config/t3-voice/repair-webhook) to start a thread that
    repairs it, at most once per REPAIR_COOLDOWN.
 2. The free Google Translate voice.
-3. Paid OpenAI gpt-audio-1.5, only when both of the above fail.
 
 The audio is stored as an MP3 behind an 8-byte PNG signature with a .png name:
 html_render only inlines local files that look like images, and the player
@@ -19,7 +18,6 @@ strips the signature again before playback.
 """
 
 import argparse
-import base64
 import concurrent.futures
 import glob
 import http.client
@@ -34,7 +32,6 @@ import urllib.parse
 import urllib.request
 import uuid
 
-ENV_FILE = os.path.expanduser("~/.config/openai-voice/env")
 REPAIR_WEBHOOK_FILE = os.path.expanduser("~/.config/t3-voice/repair-webhook")
 REPAIR_COOLDOWN = 3 * 3600  # one repair thread at a time is enough; it may take a while
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
@@ -43,25 +40,6 @@ ARBOR_URL = os.environ.get("ARBOR_TTS_URL", "http://127.0.0.1:8811/v1/audio/spee
 GOOGLE_TTS_URL = "https://translate.google.com/translate_tts"
 GOOGLE_MAX_CHARS = 190  # translate_tts rejects requests over ~200 characters
 GOOGLE_TEMPO = 1.25  # Ilias listens to the Google voice sped up; ffmpeg applies it (translate_tts ignores ttsspeed)
-PAID_MODEL = "gpt-audio-1.5"
-MALE_VOICES = {"arbor", "spruce", "cove", "ember"}  # ChatGPT voices that get the male paid voice
-READER_PROMPT = (
-    "You are a voice actor. Read the user's text aloud exactly as written, word for word, "
-    "in its language. Do not add, drop, translate or rephrase anything; no greeting, no comments. "
-    "Natural, warm, lively conversational delivery, like a smart friend explaining something."
-)
-
-
-def api_key():
-    if os.environ.get("OPENAI_API_KEY"):
-        return os.environ["OPENAI_API_KEY"]
-    with open(ENV_FILE) as f:
-        for line in f:
-            if line.startswith("OPENAI_API_KEY="):
-                return line.split("=", 1)[1].strip().strip("'\"")
-    sys.exit(f"OPENAI_API_KEY not found in env or {ENV_FILE}")
-
-
 def last_reply():
     """Final text of the previous completed turn in this Claude Code session."""
     session = os.environ.get("CLAUDE_CODE_SESSION_ID")
@@ -141,24 +119,6 @@ def speakable(md):
     return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
 
-def post(key, url, body):
-    request = urllib.request.Request(
-        url,
-        json.dumps(body).encode(),
-        {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-    )
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(request, timeout=300) as response:
-                return response.read()
-        except urllib.error.HTTPError as error:
-            raise SystemExit(f"OpenAI {body['model']} failed: {error.code} {error.read().decode()[:500]}")
-        except (urllib.error.URLError, TimeoutError) as error:
-            if attempt == 2:
-                raise SystemExit(f"OpenAI {body['model']} unreachable: {error}")
-            time.sleep(0.5)
-
-
 def chatgpt(text, voice):
     """ChatGPT Read Aloud voice from the local arbor-tts service; it writes numbers out as words first."""
     body = {"input": text, "voice": voice, "spell_numbers": True}
@@ -224,20 +184,6 @@ def google(text):
         return audio
 
 
-def paid(text, voice):
-    """OpenAI gpt-audio-1.5: the last resort, it costs money."""
-    reply = json.loads(post(api_key(), "https://api.openai.com/v1/chat/completions", {
-        "model": PAID_MODEL,
-        "modalities": ["text", "audio"],
-        "audio": {"voice": "cedar" if voice in MALE_VOICES else "marin", "format": "mp3"},
-        "messages": [
-            {"role": "system", "content": READER_PROMPT},
-            {"role": "user", "content": text},
-        ],
-    }))
-    return base64.b64decode(reply["choices"][0]["message"]["audio"]["data"])
-
-
 def request_repair(error, fallback):
     """Start a T3 thread that repairs the ChatGPT voice, unless one was started recently."""
     stamp = f"{OUT_DIR}/repair-requested"
@@ -299,16 +245,12 @@ def main():
         audio, engine = chatgpt(text, args.voice), f"chatgpt/{args.voice}"
     except SystemExit as error:
         failure = str(error)
+        print(f"t3-voice: {failure}; using Google Translate", file=sys.stderr)
+        request_repair(failure, "Google Translate")
         try:
             audio, engine = google(text), "google (fallback)"
         except SystemExit as google_error:
-            failure += f"; Google Translate fallback failed too: {google_error}"
-            print(f"t3-voice: {failure}; using paid OpenAI", file=sys.stderr)
-            request_repair(failure, f"paid OpenAI {PAID_MODEL}")
-            audio, engine = paid(text, args.voice), f"{PAID_MODEL} (fallback)"
-        else:
-            print(f"t3-voice: {failure}; using Google Translate", file=sys.stderr)
-            request_repair(failure, "Google Translate")
+            sys.exit(f"t3-voice: {failure}; Google Translate failed too: {google_error}")
 
     os.makedirs(OUT_DIR, exist_ok=True)
     for old in glob.glob(f"{OUT_DIR}/*.png"):
