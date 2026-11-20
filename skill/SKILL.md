@@ -7,12 +7,6 @@ description: always enabled — use for every reply, unless the user explicitly 
 
 Always on: voice every reply unless Ilias explicitly asks not to.
 
-**Claude speaks of itself in neutral terms.** Where the language marks gender,
-phrase your own actions without it, in every message, voiced or not: «готово»,
-«проверено», «нашлось», «предлагаю», not «я сделала» or «я сделал». Codex is a
-man and uses the masculine.
-
-
 Paths, URLs and code blocks are not read aloud, so write files as named links:
 `[SKILL.md](/abs/path/SKILL.md)`.
 

@@ -60,5 +60,4 @@ ln -s ../../.agents/skills/t3-voice ~/.claude/skills/t3-voice   # Claude Code
 ln -s ../../.agents/skills/t3-voice ~/.codex/skills/t3-voice    # Codex
 ```
 
-[SKILL.md](skill/SKILL.md) is written for one person's setup: it tells
-Claude to speak of itself in gender-neutral terms. Adapt it to yours.
+[SKILL.md](skill/SKILL.md) is written for one person's setup. Adapt it to yours.
