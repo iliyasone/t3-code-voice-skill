@@ -21,6 +21,13 @@ Never commit secrets or personal data: webhook URLs, API keys, ChatGPT
 credentials, tokens, transcripts. They live outside the repo, in
 `~/.config/t3-voice/repair-webhook` and `~/.config/chatgpt-arbor/creds.json`.
 
+## Listening statistics
+
+`stats/collector.py` runs as the systemd service `t3-voice-stats` on
+127.0.0.1:8812; the Cloudflare tunnel service `cloudflared-t3-voice` publishes
+it, and its public address is in `~/.config/t3-voice/stats-url` (not in the
+repo).
+
 ## Repair webhook
 
 The T3 scheduled task "t3-voice repair" (in this project, webhook trigger,

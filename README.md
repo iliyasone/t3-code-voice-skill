@@ -33,6 +33,16 @@ passes the script's output to T3's `html_render` tool. The script:
   with `ARBOR_TTS_URL`.
 - **Google Translate's free voice** takes over when the ChatGPT voice fails.
 
+## Listening statistics
+
+`speak.py` logs every voiced reply to `~/.local/share/t3-voice/events.jsonl`.
+When `~/.config/t3-voice/stats-url` holds a public address of
+`stats/collector.py`, the player also reports what happens to it there:
+shown, played (by itself or after a press), paused, finished, autoplay
+blocked. `stats/report.py` turns the log into a table per agent: how often
+replies are played and finished, and how often the agent's choice between
+autoplay and the quiet button was right.
+
 ## Self-repair
 
 When the ChatGPT voice fails, `speak.py` posts the error to the webhook URL

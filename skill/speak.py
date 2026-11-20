@@ -35,6 +35,8 @@ import uuid
 REPAIR_WEBHOOK_FILE = os.path.expanduser("~/.config/t3-voice/repair-webhook")
 REPAIR_COOLDOWN = 3 * 3600  # one repair thread at a time is enough; it may take a while
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
+STATS_URL_FILE = os.path.expanduser("~/.config/t3-voice/stats-url")
+STATS_FILE = os.path.expanduser("~/.local/share/t3-voice/events.jsonl")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 ARBOR_URL = os.environ.get("ARBOR_TTS_URL", "http://127.0.0.1:8811/v1/audio/speech")
 GOOGLE_TTS_URL = "https://translate.google.com/translate_tts"
@@ -205,6 +207,30 @@ def request_repair(error, fallback):
     print("t3-voice: started a repair thread", file=sys.stderr)
 
 
+def stats_url():
+    """Public address of the listening-stats collector (stats/collector.py), or "" to send nothing."""
+    try:
+        with open(STATS_URL_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def log_reply(reply_id, args, engine, chars):
+    """One line per voiced reply; the player's events join it by id in stats/report.py."""
+    record = {
+        "id": reply_id, "e": "made", "time": time.time(), "autoplay": args.autoplay, "voice": args.voice,
+        "engine": engine, "chars": chars, "agent": "claude" if os.environ.get("CLAUDECODE") else "codex",
+        "thread": os.environ.get("T3CODE_THREAD_ID"),
+    }
+    try:
+        os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
+        with open(STATS_FILE, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError as error:
+        print(f"t3-voice: could not log the reply: {error}", file=sys.stderr)
+
+
 PLAYER = (
     # Own controls instead of <audio controls>: T3's full-screen button covers the native speed menu.
     # The right 44px stay empty for that button. Until the first play it is one quiet "Listen" pill;
@@ -222,16 +248,21 @@ PLAYER = (
     'let k=0;try{k=Math.max(0,R.indexOf(+localStorage.t3voiceRate))}catch(e){}'
     'const rate=()=>{a.defaultPlaybackRate=a.playbackRate=R[k];r.textContent=R[k]+"×"};rate();'
     'r.onclick=()=>{k=(k+1)%R.length;rate();try{localStorage.t3voiceRate=R[k]}catch(e){}};'
+    # Listening statistics: each event goes to the collector as a beacon (no reply needed, no CORS preflight).
+    'const E="__STATS__",I="__ID__",F=Date.now()-__MADE__<12e4;let U="user";'
+    'const L=(e,x)=>{if(E)try{navigator.sendBeacon(E,JSON.stringify({id:I,e,at:Math.round(a.currentTime*10)/10,'
+    'd:Math.round((a.duration||0)*10)/10,rate:R[k],dev:/Mobi|Android/i.test(navigator.userAgent)?"phone":"desktop",...x}))}catch(_){}};'
     'g.onclick=()=>a.paused?a.play():a.pause();'
-    'a.onplay=()=>{p.className="";g.textContent="❚❚"};a.onpause=()=>g.textContent="▶\uFE0E";'
+    'a.onplay=()=>{L("play",{by:U});U="user";p.className="";g.textContent="❚❚"};'
+    'a.onpause=()=>{L("pause");g.textContent="▶\uFE0E"};addEventListener("pagehide",()=>a.paused||L("leave"));'
     'a.onloadedmetadata=a.ontimeupdate=()=>{s.max=a.duration||1;s.value=a.currentTime;'
     't.textContent=p.className?f(a.duration||0):f(a.currentTime)+" / "+f(a.duration||0)};s.oninput=()=>a.currentTime=+s.value;'
     # Media keys and a "play/pause" gesture reach the reply through the app's media session; at the end it
     # rewinds and stays paused, so the session (and the gesture) survives to play it again.
     'const M=navigator.mediaSession;if(M){M.setActionHandler("play",()=>a.play());M.setActionHandler("pause",()=>a.pause());'
-    'M.setActionHandler("stop",()=>{a.pause();a.currentTime=0})}a.onended=()=>{a.currentTime=0;a.pause()};'
+    'M.setActionHandler("stop",()=>{a.pause();a.currentTime=0})}a.onended=()=>{L("ended");a.currentTime=0;a.pause()};L("shown",{fresh:F});'
     # Only an --autoplay reply starts by itself, and only when freshly made, not when the thread is reopened.
-    '__AUTOPLAY__&&Date.now()-__MADE__<12e4&&a.play().catch(()=>{})</script>'
+    '__AUTOPLAY__&&F&&(U="auto",a.play().catch(()=>{U="user";L("blocked")}))</script>'
 )
 
 
@@ -261,13 +292,16 @@ def main():
     for old in glob.glob(f"{OUT_DIR}/*.png"):
         if time.time() - os.path.getmtime(old) > 7 * 86400:
             os.remove(old)
-    path = f"{OUT_DIR}/{uuid.uuid4().hex[:12]}.png"
+    reply_id = uuid.uuid4().hex[:12]
+    path = f"{OUT_DIR}/{reply_id}.png"
     with open(path, "wb") as f:
         f.write(PNG_SIGNATURE + audio)
 
     label = "Прослушать" if re.search(r"[а-яё]", text, re.I) else "Listen"
     player = PLAYER.replace("__LABEL__", label).replace("__AUTOPLAY__", str(int(args.autoplay)))
+    player = player.replace("__ID__", reply_id).replace("__STATS__", stats_url())
     print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
+    log_reply(reply_id, args, engine, len(text))
     print(
         f"t3-voice: {engine}, {len(text)} chars, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
