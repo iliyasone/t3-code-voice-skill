@@ -46,5 +46,5 @@ a voice answer, or is waiting on a short answer while doing something else.
 If the script fails, send the reply as text with one line saying the voice
 failed.
 
-Voices: Claude Opus `--voice cove`, Claude Fable `--voice breeze`, Codex
+Voices: Claude Opus `--voice cove`, Claude Fable `--voice ember`, Codex
 `--voice arbor`.

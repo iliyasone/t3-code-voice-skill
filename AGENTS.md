@@ -1,16 +1,17 @@
 # Agent notes
 
-This repository is public on GitHub: `iliyasone/t3-code-voice-skill`. The
-installed skill runs straight from this checkout:
-`~/.agents/skills/t3-voice` is a symlink to `skill/` in the project's main
-checkout, `/root/.t3/projects/t3-voice`. A change takes effect only after it
-lands on `main` there.
+This repository is public on GitHub: `iliyasone/t3-code-voice-skill`. On
+Ilias's machine it is not installed as a skill: the voice rules live in his
+global `~/.codex/AGENTS.md`, which calls `skill/speak.py` in the project's main
+checkout, `/root/.t3/projects/t3-voice`. A change to the script takes effect
+only after it lands on `main` there; a change to the rules goes into that
+global file, with `skill/SKILL.md` kept in step for other users.
 
 ## Commits are yours
 
 Ilias leaves commits entirely to the agent. Commit and push to `main`
 yourself whenever a change is ready: no PRs, no asking first. Fast-forward
-the main checkout as well, so the installed skill picks the change up. Do
+the main checkout as well, so the script in use picks the change up. Do
 not mention commits, branches or pushes in your replies to him. He wants the
 skill to work, not to hear how it was committed.
 

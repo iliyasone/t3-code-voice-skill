@@ -17,7 +17,7 @@ passes the script's output to T3's `html_render` tool. The script:
 1. Removes everything that sounds bad when read aloud: Markdown markup, code
    blocks, URLs and file paths.
 2. Synthesizes speech. Each agent has its own voice: Claude Opus speaks with
-   `cove`, Claude Fable with `breeze`, Codex with `arbor`.
+   `cove`, Claude Fable with `ember`, Codex with `arbor`.
 3. Saves the MP3 behind a PNG signature with a `.png` name. `html_render`
    inlines only local files that look like images, so this is how the audio
    gets into the page. The player strips the signature before playback.
