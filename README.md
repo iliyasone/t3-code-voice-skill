@@ -3,8 +3,9 @@
 # T3 Code voice skill
 
 An agent skill that makes coding agents in [T3 Code](https://t3.codes) answer
-out loud. Every reply comes with a small player that starts playing on its
-own, voiced by one of ChatGPT's Read Aloud voices.
+out loud. Every reply comes with a small player voiced by one of ChatGPT's
+Read Aloud voices: a quiet "Listen" button under the reply, or, when the
+answer is needed right away, a player that starts on its own.
 
 ![A voiced agent reply in T3 Code](assets/screenshot.png)
 
@@ -16,12 +17,12 @@ passes the script's output to T3's `html_render` tool. The script:
 1. Removes everything that sounds bad when read aloud: Markdown markup, code
    blocks, URLs and file paths.
 2. Synthesizes speech. Each agent has its own voice: Claude Opus speaks with
-   `sol`, Claude Fable with `breeze`, Codex with `arbor`.
+   `cove`, Claude Fable with `breeze`, Codex with `arbor`.
 3. Saves the MP3 behind a PNG signature with a `.png` name. `html_render`
    inlines only local files that look like images, so this is how the audio
    gets into the page. The player strips the signature before playback.
 4. Prints a player with play/pause, seek and a remembered playback speed.
-   Media keys work too.
+   Media keys work too. It plays on its own only with `--autoplay`.
 
 ## Voices and fallbacks
 
@@ -50,4 +51,4 @@ ln -s ../../.agents/skills/t3-voice ~/.codex/skills/t3-voice    # Codex
 ```
 
 [SKILL.md](skill/SKILL.md) is written for one person's setup: it tells
-Claude to speak of herself in the feminine. Adapt it to yours.
+Claude to speak of itself in gender-neutral terms. Adapt it to yours.

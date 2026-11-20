@@ -207,33 +207,38 @@ def request_repair(error, fallback):
 
 PLAYER = (
     # Own controls instead of <audio controls>: T3's full-screen button covers the native speed menu.
-    # The right 44px stay empty for that button.
+    # The right 44px stay empty for that button. Until the first play it is one quiet "Listen" pill;
+    # seek and speed appear once it plays.
     '<style>#p{display:flex;align-items:center;gap:10px;height:44px;padding-right:44px;font:13px var(--font-sans)}'
-    '#p button{flex:none;height:36px;border:1px solid var(--border);border-radius:18px;background:var(--secondary);'
-    'color:var(--secondary-foreground);font:inherit;cursor:pointer}#g{width:36px;font-size:15px}#r{min-width:52px}'
+    '#p button{flex:none;height:32px;border:1px solid var(--border);border-radius:16px;background:var(--secondary);'
+    'color:var(--secondary-foreground);font:inherit;cursor:pointer;padding:0 12px}#r{min-width:52px}'
     '#s{flex:1;min-width:40px;accent-color:var(--primary)}#t{flex:none;color:var(--muted-foreground);font-variant-numeric:tabular-nums}'
-    '</style><div id=p><button id=g>▶</button><input id=s type=range min=0 max=1 step=any value=0>'
-    '<span id=t>0:00</span><button id=r>1×</button></div><audio id=a></audio><script>'
+    '#p.c #s,#p.c #r{display:none}</style>'
+    '<div id=p class=c><button id=g>▶&#xFE0E; __LABEL__</button><input id=s type=range min=0 max=1 step=any value=0>'
+    '<span id=t></span><button id=r>1×</button></div><audio id=a preload=metadata></audio><script>'
     'const S="__PATH__",b=atob(S.slice(S.indexOf(",")+1));'
     'a.src=URL.createObjectURL(new Blob([Uint8Array.from(b,c=>c.charCodeAt(0)).slice(8)],{type:"audio/mpeg"}));'
     'const R=[1,1.25,1.5,1.75,2],f=x=>(x/60|0)+":"+String(x%60|0).padStart(2,"0");'
     'let k=0;try{k=Math.max(0,R.indexOf(+localStorage.t3voiceRate))}catch(e){}'
     'const rate=()=>{a.defaultPlaybackRate=a.playbackRate=R[k];r.textContent=R[k]+"×"};rate();'
     'r.onclick=()=>{k=(k+1)%R.length;rate();try{localStorage.t3voiceRate=R[k]}catch(e){}};'
-    'g.onclick=()=>a.paused?a.play():a.pause();a.onplay=()=>g.textContent="❚❚";a.onpause=()=>g.textContent="▶";'
+    'g.onclick=()=>a.paused?a.play():a.pause();'
+    'a.onplay=()=>{p.className="";g.textContent="❚❚"};a.onpause=()=>g.textContent="▶\uFE0E";'
     'a.onloadedmetadata=a.ontimeupdate=()=>{s.max=a.duration||1;s.value=a.currentTime;'
-    't.textContent=f(a.currentTime)+" / "+f(a.duration||0)};s.oninput=()=>a.currentTime=+s.value;'
+    't.textContent=p.className?f(a.duration||0):f(a.currentTime)+" / "+f(a.duration||0)};s.oninput=()=>a.currentTime=+s.value;'
     # Media keys and a "play/pause" gesture reach the reply through the app's media session; at the end it
     # rewinds and stays paused, so the session (and the gesture) survives to play it again.
     'const M=navigator.mediaSession;if(M){M.setActionHandler("play",()=>a.play());M.setActionHandler("pause",()=>a.pause());'
     'M.setActionHandler("stop",()=>{a.pause();a.currentTime=0})}a.onended=()=>{a.currentTime=0;a.pause()};'
-    'Date.now()-__MADE__<12e4&&a.play().catch(()=>{})</script>'
+    # Only an --autoplay reply starts by itself, and only when freshly made, not when the thread is reopened.
+    '__AUTOPLAY__&&Date.now()-__MADE__<12e4&&a.play().catch(()=>{})</script>'
 )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--last", action="store_true", help="speak the previous reply of this session")
+    parser.add_argument("--autoplay", action="store_true", help="start playing as soon as the reply appears")
     parser.add_argument("--voice", default="sol", help="ChatGPT voice: arbor, sol, breeze, juniper, maple, vale, ... (default: sol)")
     args = parser.parse_args()
 
@@ -260,7 +265,9 @@ def main():
     with open(path, "wb") as f:
         f.write(PNG_SIGNATURE + audio)
 
-    print(PLAYER.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
+    label = "Прослушать" if re.search(r"[а-яё]", text, re.I) else "Listen"
+    player = PLAYER.replace("__LABEL__", label).replace("__AUTOPLAY__", str(int(args.autoplay)))
+    print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     print(
         f"t3-voice: {engine}, {len(text)} chars, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
