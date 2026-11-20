@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Listening statistics for voiced replies, per agent.
 
-A reply counts as seen when its player loaded within two minutes of being made,
-that is, while Ilias was in the thread. Among seen replies:
+A reply counts as seen once its player has loaded in Ilias's app. Among seen
+replies:
 - played: the audio ran (by itself or after a press);
 - finished: playback reached 90% of the audio;
 - right call: an autoplay reply that he let play past half, or a quiet reply he
   never pressed. Wrong: an autoplay reply stopped before half, or a quiet reply
-  he chose to play.
+  he chose to play. An autoplay reply first opened over two minutes after it
+  was made never started by itself, so it is left out.
 """
 
 import argparse
@@ -41,10 +42,10 @@ def replies(since):
         yield {
             "agent": NAMES.get(reply["voice"], reply["voice"]),
             "autoplay": reply["autoplay"],
-            "seen": any(e["e"] == "shown" and e.get("fresh") for e in log),
+            "seen": any(e["e"] == "shown" for e in log),
+            "auto": any(e.get("by") == "auto" for e in plays),
             "played": bool(plays),
             "pressed": any(e.get("by") == "user" for e in plays),
-            "blocked": any(e["e"] == "blocked" for e in log),
             "share": reached / duration if reached is not None and duration else None,
         }
 
@@ -53,7 +54,7 @@ def verdict(r):
     if not r["seen"]:
         return None
     if r["autoplay"]:
-        if (r["blocked"] and not r["pressed"]) or r["share"] is None:
+        if not r["auto"] or r["share"] is None:
             return None
         return r["share"] >= 0.5
     return not r["pressed"]
@@ -68,7 +69,7 @@ def summary(rows):
     pct = lambda a, b: f"{len(a)}/{len(b)} ({100 * len(a) // len(b)}%)" if b else "—"
     return [
         ("Replies", str(len(rows))),
-        ("Seen live", str(len(seen))),
+        ("Seen", str(len(seen))),
         ("Autoplay", pct(auto, seen)),
         ("Played", pct(played, seen)),
         ("Finished", pct(finished, played)),
