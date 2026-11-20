@@ -4,7 +4,7 @@
 
 An agent skill that makes coding agents in [T3 Code](https://t3.codes) answer
 out loud. Every reply comes with a small player voiced by one of ChatGPT's
-Read Aloud voices: a quiet "Listen" button under the reply, or, when the
+Read Aloud voices: a quiet "Listen" button above the reply, or, when the
 answer is needed right away, a player that starts on its own.
 
 ![A voiced agent reply in T3 Code](assets/screenshot.png)
