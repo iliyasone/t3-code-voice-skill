@@ -216,11 +216,11 @@ def stats_url():
         return ""
 
 
-def log_reply(reply_id, args, engine, chars):
+def log_reply(reply_id, args, engine, text):
     """One line per voiced reply; the player's events join it by id in stats/report.py."""
     record = {
         "id": reply_id, "e": "made", "time": time.time(), "autoplay": args.autoplay, "voice": args.voice,
-        "engine": engine, "chars": chars, "agent": "claude" if os.environ.get("CLAUDECODE") else "codex",
+        "engine": engine, "text": text, "agent": "claude" if os.environ.get("CLAUDECODE") else "codex",
         "thread": os.environ.get("T3CODE_THREAD_ID"),
     }
     try:
@@ -301,7 +301,7 @@ def main():
     player = PLAYER.replace("__LABEL__", label).replace("__AUTOPLAY__", str(int(args.autoplay)))
     player = player.replace("__ID__", reply_id).replace("__STATS__", stats_url())
     print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
-    log_reply(reply_id, args, engine, len(text))
+    log_reply(reply_id, args, engine, text)
     print(
         f"t3-voice: {engine}, {len(text)} chars, {len(audio) // 1024} KiB, "
         f"synthesized in {time.time() - started:.1f}s",
