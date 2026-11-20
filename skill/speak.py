@@ -245,17 +245,21 @@ PLAYER = (
     'const S="__PATH__",b=atob(S.slice(S.indexOf(",")+1));'
     'a.src=URL.createObjectURL(new Blob([Uint8Array.from(b,c=>c.charCodeAt(0)).slice(8)],{type:"audio/mpeg"}));'
     'const R=[1,1.25,1.5,1.75,2],f=x=>(x/60|0)+":"+String(x%60|0).padStart(2,"0");'
-    'let k=0;try{k=Math.max(0,R.indexOf(+localStorage.t3voiceRate))}catch(e){}'
-    'const rate=()=>{a.defaultPlaybackRate=a.playbackRate=R[k];r.textContent=R[k]+"×"};rate();'
-    'r.onclick=()=>{k=(k+1)%R.length;rate();try{localStorage.t3voiceRate=R[k]}catch(e){}};'
+    'let k=0,pos=0;const rate=()=>{a.defaultPlaybackRate=a.playbackRate=R[k];r.textContent=R[k]+"×"};rate();'
     # Listening statistics: each event goes to the collector as a beacon (no reply needed, no CORS preflight).
     'const E="__STATS__",I="__ID__",F=Date.now()-__MADE__<12e4;let U="user";'
     'const L=(e,x)=>{if(E)try{navigator.sendBeacon(E,JSON.stringify({id:I,e,at:Math.round(a.currentTime*10)/10,'
     'd:Math.round((a.duration||0)*10)/10,rate:R[k],dev:/Mobi|Android/i.test(navigator.userAgent)?"phone":"desktop",...x}))}catch(_){}};'
+    'r.onclick=()=>{k=(k+1)%R.length;rate();L("rate")};'
+    # The frame has an opaque origin and no storage, so the collector remembers where this reply stopped
+    # and the last chosen speed; a reopened reply resumes from there.
+    'const go=()=>{if(pos&&a.readyState&&a.paused&&!a.currentTime)a.currentTime=pos};'
+    'E&&fetch(E+"?id="+I).then(x=>x.json()).then(x=>{k=Math.max(0,R.indexOf(x.rate));rate();'
+    'if(x.at>1&&p.className){pos=x.at;g.textContent="▶\uFE0E __RESUME__ · "+f(pos);go()}}).catch(()=>{});'
     'g.onclick=()=>a.paused?a.play():a.pause();'
     'a.onplay=()=>{L("play",{by:U});U="user";p.className="";g.textContent="❚❚"};'
     'a.onpause=()=>{L("pause");g.textContent="▶\uFE0E"};addEventListener("pagehide",()=>a.paused||L("leave"));'
-    'a.onloadedmetadata=a.ontimeupdate=()=>{s.max=a.duration||1;s.value=a.currentTime;'
+    'a.onloadedmetadata=a.ontimeupdate=()=>{go();s.max=a.duration||1;s.value=a.currentTime;'
     't.textContent=p.className?f(a.duration||0):f(a.currentTime)+" / "+f(a.duration||0)};s.oninput=()=>a.currentTime=+s.value;'
     # Media keys and a "play/pause" gesture reach the reply through the app's media session; at the end it
     # rewinds and stays paused, so the session (and the gesture) survives to play it again.
@@ -297,8 +301,9 @@ def main():
     with open(path, "wb") as f:
         f.write(PNG_SIGNATURE + audio)
 
-    label = "Прослушать" if re.search(r"[а-яё]", text, re.I) else "Listen"
-    player = PLAYER.replace("__LABEL__", label).replace("__AUTOPLAY__", str(int(args.autoplay)))
+    russian = re.search(r"[а-яё]", text, re.I)
+    player = PLAYER.replace("__LABEL__", "Прослушать" if russian else "Listen")
+    player = player.replace("__RESUME__", "Продолжить" if russian else "Resume").replace("__AUTOPLAY__", str(int(args.autoplay)))
     player = player.replace("__ID__", reply_id).replace("__STATS__", stats_url())
     print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     log_reply(reply_id, args, engine, text)

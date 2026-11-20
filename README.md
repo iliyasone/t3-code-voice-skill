@@ -21,7 +21,7 @@ passes the script's output to T3's `html_render` tool. The script:
 3. Saves the MP3 behind a PNG signature with a `.png` name. `html_render`
    inlines only local files that look like images, so this is how the audio
    gets into the page. The player strips the signature before playback.
-4. Prints a player with play/pause, seek and a remembered playback speed.
+4. Prints a player with play/pause, seek and playback speed.
    Media keys work too. It plays on its own only with `--autoplay`.
 
 ## Voices and fallbacks
@@ -39,7 +39,10 @@ passes the script's output to T3's `html_render` tool. The script:
 When `~/.config/t3-voice/stats-url` holds a public address of
 `stats/collector.py`, the player also reports what happens to it there:
 shown, played (by itself or after a press), paused, finished, autoplay
-blocked. `stats/report.py` turns the log into a table per agent: how often
+blocked, speed changed. The player has no storage of its own (`html_render`
+frames have an opaque origin), so it asks the collector where the reply was
+stopped and which speed was chosen last, and a reopened reply resumes from
+there. `stats/report.py` turns the log into a table per agent: how often
 replies are played and finished, and how often the agent's choice between
 autoplay and the quiet button was right.
 
