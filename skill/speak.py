@@ -416,6 +416,11 @@ def main():
         f"synthesized in {time.time() - started:.1f}s",
         file=sys.stderr,
     )
+    # Agents tended to write the final message anew after voicing it, sometimes in another language.
+    if args.karaoke:
+        print("t3-voice: the reply is in the player; send one short line as the final message.", file=sys.stderr)
+    elif not args.last:
+        print(f"t3-voice: send exactly this as the final message, same words and language:\n{reply.strip()}", file=sys.stderr)
 
 
 if __name__ == "__main__":
