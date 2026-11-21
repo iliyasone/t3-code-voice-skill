@@ -417,6 +417,11 @@ def main():
         NOTES.append("the reply is in the player; send one short line as the final message.")
     elif not args.last:
         NOTES.append(f"send exactly this as the final message, same words and language:\n{reply.strip()}")
+        # hooks/voice-reply-match.py compares the final message of this Claude Code session with it.
+        session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+        if session:
+            with open(f"{OUT_DIR}/pending-{session}.md", "w") as f:
+                f.write(reply)
     # Codex hands stderr to the agent mixed into stdout, and the agent passes all of it to html_render,
     # so the notes go into an HTML comment: the agent reads them, the page does not show them.
     notes = "\n".join(NOTES).replace("--", "—")

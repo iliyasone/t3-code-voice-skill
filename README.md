@@ -37,6 +37,14 @@ estimated from sentence lengths and moved to the nearest pause in the audio.
   with `ARBOR_TTS_URL`.
 - **Google Translate's free voice** takes over when the ChatGPT voice fails.
 
+## Same words in the voice and the text
+
+Agents sometimes wrote the final message again after voicing it, and then it
+drifted: other words, or another language. `hooks/voice-reply-match.py` is a
+Claude Code Stop hook: it compares the final message with the voiced text,
+ignoring formatting, and if the words differ, it hands the voiced text back to
+send unchanged. Register it under `hooks.Stop` in `~/.claude/settings.json`.
+
 ## Listening statistics
 
 `speak.py` logs every voiced reply to `~/.local/share/t3-voice/events.jsonl`.
