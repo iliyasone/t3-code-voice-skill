@@ -38,6 +38,7 @@ REPAIR_COOLDOWN = 3 * 3600  # one repair thread at a time is enough; it may take
 OUT_DIR = os.path.expanduser("~/.cache/t3-voice")
 STATS_URL_FILE = os.path.expanduser("~/.config/t3-voice/stats-url")
 STATS_FILE = os.path.expanduser("~/.local/share/t3-voice/events.jsonl")
+NOTES = []  # status lines for the agent, printed as an HTML comment after the player
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 ARBOR_URL = os.environ.get("ARBOR_TTS_URL", "http://127.0.0.1:8811/v1/audio/speech")
 GOOGLE_TTS_URL = "https://translate.google.com/translate_tts"
@@ -201,11 +202,11 @@ def request_repair(error, fallback):
         request = urllib.request.Request(url, json.dumps(body).encode(), headers)
         urllib.request.urlopen(request, timeout=15).close()
     except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
-        print(f"t3-voice: could not request a repair: {e}", file=sys.stderr)
+        NOTES.append(f"could not request a repair: {e}")
         return
     os.makedirs(OUT_DIR, exist_ok=True)
     open(stamp, "w").close()
-    print("t3-voice: started a repair thread", file=sys.stderr)
+    NOTES.append("started a repair thread")
 
 
 def stats_url():
@@ -229,7 +230,7 @@ def log_reply(reply_id, args, engine, text):
         with open(STATS_FILE, "a") as f:
             f.write(json.dumps(record) + "\n")
     except OSError as error:
-        print(f"t3-voice: could not log the reply: {error}", file=sys.stderr)
+        NOTES.append(f"could not log the reply: {error}")
 
 
 PLAYER = (
@@ -386,7 +387,7 @@ def main():
         audio, engine = chatgpt(text, args.voice), f"chatgpt/{args.voice}"
     except SystemExit as error:
         failure = str(error)
-        print(f"t3-voice: {failure}; using Google Translate", file=sys.stderr)
+        NOTES.append(f"{failure}; using Google Translate")
         request_repair(failure, "Google Translate")
         try:
             audio, engine = google(text), "google (fallback)"
@@ -409,19 +410,18 @@ def main():
     if args.karaoke:
         times = json.dumps(sentence_starts(spoken, audio))
         player = KARAOKE.replace("__BODY__", body).replace("__PLAYER__", player).replace("__TIMES__", times)
-    print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     log_reply(reply_id, args, engine, text)
-    print(
-        f"t3-voice: {engine}, {len(text)} chars, {len(audio) // 1024} KiB, "
-        f"synthesized in {time.time() - started:.1f}s",
-        file=sys.stderr,
-    )
+    NOTES.append(f"{engine}, {len(text)} chars, {len(audio) // 1024} KiB, synthesized in {time.time() - started:.1f}s")
     # Agents tended to write the final message anew after voicing it, sometimes in another language.
     if args.karaoke:
-        print("t3-voice: the reply is in the player; send one short line as the final message.", file=sys.stderr)
+        NOTES.append("the reply is in the player; send one short line as the final message.")
     elif not args.last:
-        print(f"t3-voice: send exactly this as the final message, same words and language:\n{reply.strip()}", file=sys.stderr)
-
+        NOTES.append(f"send exactly this as the final message, same words and language:\n{reply.strip()}")
+    # Codex hands stderr to the agent mixed into stdout, and the agent passes all of it to html_render,
+    # so the notes go into an HTML comment: the agent reads them, the page does not show them.
+    notes = "\n".join(NOTES).replace("--", "—")
+    print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
+    print(f"<!-- t3-voice:\n{notes}\n-->")
 
 if __name__ == "__main__":
     main()
