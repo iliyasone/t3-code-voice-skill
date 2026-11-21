@@ -20,6 +20,7 @@ strips the signature again before playback.
 import argparse
 import concurrent.futures
 import glob
+import html
 import http.client
 import json
 import os
@@ -221,7 +222,7 @@ def log_reply(reply_id, args, engine, text):
     record = {
         "id": reply_id, "e": "made", "time": time.time(), "autoplay": args.autoplay, "voice": args.voice,
         "engine": engine, "text": text, "agent": "claude" if os.environ.get("CLAUDECODE") else "codex",
-        "thread": os.environ.get("T3CODE_THREAD_ID"),
+        "thread": os.environ.get("T3CODE_THREAD_ID"), "karaoke": args.karaoke,
     }
     try:
         os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
@@ -270,15 +271,115 @@ PLAYER = (
 )
 
 
+def inline_html(md):
+    out = html.escape(md, quote=False)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    out = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", out)
+    out = re.sub(r"(?<![\w*])\*([^*]+)\*(?![\w*])", r"<i>\1</i>", out)
+    return re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", r'<a href="\2">\1</a>', out)
+
+
+def sentence_spans(md, spoken):
+    """A block's sentences as HTML; each one read aloud becomes a span and adds its words to `spoken`."""
+    parts = []
+    for piece in re.split(r"(?<=[.!?…:;])\s+(?=[A-ZА-ЯЁ«\[`*\d])", md.strip()):
+        words = speakable(piece)
+        if words:
+            parts.append(f"<span class=s data-i={len(spoken)}>{inline_html(piece)}</span>")
+            spoken.append(words)
+        else:
+            parts.append(inline_html(piece))
+    return " ".join(parts)
+
+
+def karaoke_body(md):
+    """The reply's Markdown (paragraphs, headings, lists, code blocks) as HTML, and the sentences to read."""
+    spoken, out, lines, i = [], [], md.strip().splitlines(), 0
+    item = re.compile(r"\s*(?:[-*+]|\d+\.)\s+(.*)")
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("```"):
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith("```"):
+                j += 1
+            out.append("<pre>" + html.escape("\n".join(lines[i + 1:j])) + "</pre>")
+            i = j + 1
+        elif m := re.match(r"(#{1,6})\s+(.*)", line):
+            out.append(f"<h{len(m[1]) + 1}>{sentence_spans(m[2], spoken)}</h{len(m[1]) + 1}>")
+            i += 1
+        elif item.match(line):
+            tag = "ol" if re.match(r"\s*\d+\.", line) else "ul"
+            items = []
+            while i < len(lines) and (m := item.match(lines[i])):
+                items.append(f"<li>{sentence_spans(m[1], spoken)}</li>")
+                i += 1
+            out.append(f"<{tag}>{''.join(items)}</{tag}>")
+        elif line.strip():
+            j = i
+            while j < len(lines) and lines[j].strip() and not re.match(r"```|#{1,6}\s", lines[j]) and not item.match(lines[j]):
+                j += 1
+            out.append(f"<p>{sentence_spans(' '.join(lines[i:j]), spoken)}</p>")
+            i = j
+        else:
+            i += 1
+    return "".join(out), spoken
+
+
+def sentence_starts(spoken, audio):
+    """Start second of each sentence: the time expected from its length, moved to the nearest pause in the audio."""
+    log = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", "pipe:0", "-af", "silencedetect=noise=-38dB:d=0.18", "-f", "null", "-"],
+        input=audio, capture_output=True,
+    ).stderr.decode()
+    gaps = list(zip(*([float(x) for x in re.findall(rf"silence_{k}: ([\d.]+)", log)] for k in ("start", "end"))))
+    clock = re.findall(r"time=(\d+):(\d+):([\d.]+)", log)
+    duration = max((int(h) * 3600 + int(m) * 60 + float(s) for h, m, s in clock), default=0)
+    times, at, left = [0.0], 0.0, sum(len(s) for s in spoken)
+    for sentence in spoken[:-1]:
+        length = len(sentence) * (duration - at) / left
+        guess = at + length
+        near = [g for g in gaps if g[0] > at + 0.3 and abs(g[0] - guess) < max(1.5, length * 0.45)]
+        if near:  # a longer pause is more likely a sentence end
+            gap = min(near, key=lambda g: abs(g[0] - guess) - 3 * (g[1] - g[0]))
+            guess = gap[1] - 0.05
+            gaps = [g for g in gaps if g[0] > gap[0]]
+        at, left = guess, left - len(sentence)
+        times.append(round(at, 2))
+    return times
+
+
+KARAOKE = (
+    # --karaoke: the whole reply sits under the player, and the sentence being read is highlighted.
+    # A click on a sentence plays from it. Links to local files do not open from a frame.
+    '<style>#b{font:14px/1.65 var(--font-sans);overflow-wrap:anywhere}#b p{margin:.6em 0}'
+    '#b ul,#b ol{margin:.6em 0;padding-left:1.4em}#b li{margin:.25em 0}'
+    '#b code,#b pre{font:12.5px var(--font-mono);background:var(--code-background);border-radius:4px;padding:1px 4px}'
+    '#b pre{padding:10px;overflow-x:auto}#b a{color:var(--primary)}'
+    '.s{cursor:pointer;border-radius:3px;transition:background .15s;box-decoration-break:clone;-webkit-box-decoration-break:clone}'
+    '.s.on{background:color-mix(in srgb,var(--primary) 22%,transparent)}</style>'
+    '__PLAYER__<div id=b>__BODY__</div><script>const T=__TIMES__,Q=[...document.querySelectorAll(".s")];'
+    'const mark=()=>{let n=-1;if(!p.className&&a.currentTime)for(let i=0;i<T.length&&T[i]<=a.currentTime+.05;i++)n=i;'
+    'Q.forEach(q=>q.classList.toggle("on",+q.dataset.i===n))};'
+    '["timeupdate","seeked","ended"].forEach(e=>a.addEventListener(e,mark));'
+    'Q.forEach(q=>q.onclick=e=>{if(e.target.closest("a")||String(getSelection()))return;a.currentTime=T[+q.dataset.i];a.play()})</script>'
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--last", action="store_true", help="speak the previous reply of this session")
     parser.add_argument("--autoplay", action="store_true", help="start playing as soon as the reply appears")
+    parser.add_argument("--karaoke", action="store_true", help="show the whole reply and highlight the sentence being read")
     parser.add_argument("--voice", default="sol", help="ChatGPT voice: arbor, sol, breeze, juniper, maple, vale, ... (default: sol)")
     args = parser.parse_args()
 
     started = time.time()
-    text = speakable(last_reply() if args.last else sys.stdin.read())
+    reply = last_reply() if args.last else sys.stdin.read()
+    if args.karaoke:
+        body, spoken = karaoke_body(reply)
+        text = " ".join(spoken)
+    else:
+        text = speakable(reply)
     if not text:
         sys.exit("nothing to speak")
     try:
@@ -305,6 +406,9 @@ def main():
     player = PLAYER.replace("__LABEL__", "Прослушать" if russian else "Listen")
     player = player.replace("__RESUME__", "Продолжить" if russian else "Resume").replace("__AUTOPLAY__", str(int(args.autoplay)))
     player = player.replace("__ID__", reply_id).replace("__STATS__", stats_url())
+    if args.karaoke:
+        times = json.dumps(sentence_starts(spoken, audio))
+        player = KARAOKE.replace("__BODY__", body).replace("__PLAYER__", player).replace("__TIMES__", times)
     print(player.replace("__PATH__", path).replace("__MADE__", str(int(time.time() * 1000))))
     log_reply(reply_id, args, engine, text)
     print(

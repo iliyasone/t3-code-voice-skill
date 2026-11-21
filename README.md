@@ -24,6 +24,10 @@ passes the script's output to T3's `html_render` tool. The script:
 4. Prints a player with play/pause, seek and playback speed.
    Media keys work too. It plays on its own only with `--autoplay`.
 
+With `--karaoke` the player also shows the whole reply and highlights the
+sentence being read; a click on a sentence plays from it. Sentence times are
+estimated from sentence lengths and moved to the nearest pause in the audio.
+
 ## Voices and fallbacks
 
 - **ChatGPT Read Aloud voices** come from
